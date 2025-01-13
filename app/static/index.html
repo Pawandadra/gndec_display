@@ -64,7 +64,7 @@
                 } else {
                     const filename = data.filename;
                     const fileExtension = filename.split('.').pop().toLowerCase();
-                    const filePath = `static/uploads/${filename}`;
+                    const filePath = `static/uploads/${filename}?t=${new Date().getTime()}`;
                     console.log(`File path: ${filePath}`);
                     if (fileExtension === 'pdf') {
                         displayPDF(filePath);
@@ -94,7 +94,7 @@
             const canvas = document.createElement('canvas');
             container.appendChild(canvas);
 
-            const loadingTask = pdfjsLib.getDocument(url);
+            const loadingTask = pdfjsLib.getDocument(`${url}?t=${new Date().getTime()}`);
             loadingTask.promise.then(function (pdf) {
                 pdf.getPage(1).then(function (page) {
                     const originalWidth = page.getViewport({ scale: 1 }).width;
