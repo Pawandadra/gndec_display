@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNDEC T-point display</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        /* Ensure the body fills the entire screen */
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            /* display: flex; */
+            overflow: hidden;
+            justify-content: center;
+            align-items: center;
+            background-color: #FFFFFF;
+            /* Optional background color */
+        }
+
+        /* Style for the canvas (PDF render area) */
+        canvas,
+        img,
+        video {
+            display: block;
+            margin: auto;
+            max-width: 100%;
+            max-height: 100%;
+            /* Ensures it doesn't have extra space around it */
+        }
+
+        img,
+        video {
+            display: block;
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <!-- Content will be dynamically loaded -->
+    </div>
+    <!-- <canvas id="pdfCanvas"></canvas> -->
+    <script>
+        const container = document.getElementById('container');
+        // const url = 'gndec.pdf'; // Path to your PDF file
+        // Fetch file from the server
+        fetch('/file')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    container.innerHTML = `<p>${data.error}</p>`;
+                } else {
+                    const filename = data.filename;
+                    const fileExtension = filename.split('.').pop().toLowerCase();
+                    const filePath = `static/uploads/${filename}`;
+                    console.log(`File path: ${filePath}`);
+                    if (fileExtension === 'pdf') {
+                        displayPDF(filePath);
+                    } else if (['png', 'gif', 'jpg', 'jpeg'].includes(fileExtension)) {
+                        container.innerHTML = `<img src="${filePath}" alt="Image">`;
+                    } else if (fileExtension === 'mp4') {
+                        const uniqueFilePath = `${filePath}?t=${new Date().getTime()}`
+                        container.innerHTML = `
+                             <video muted autoplay loop playsinline style="width: 100vw; height: 100vh; object-fit: cover;">
+                                <source src="${uniqueFilePath}" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                        `;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching file:', error);
+                container.innerHTML = `<p>Error fetching file.</p>`;
+            });
+
+        // Function to display PDF
+        function displayPDF(url) {
+            const pdfjsLib = window['pdfjs-dist/build/pdf'];
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+            const canvas = document.createElement('canvas');
+            container.appendChild(canvas);
+
+            const loadingTask = pdfjsLib.getDocument(url);
+            loadingTask.promise.then(function (pdf) {
+                pdf.getPage(1).then(function (page) {
+                    const originalWidth = page.getViewport({ scale: 1 }).width;
+                    const originalHeight = page.getViewport({ scale: 1 }).height;
+
+                    // Get the dimensions of the window or the container
+                    const windowWidth = window.innerWidth;
+                    const windowHeight = window.innerHeight;
+
+                    // Calculate the scale factor to maintain the aspect ratio
+                    const scale = Math.min(windowWidth / originalWidth, windowHeight / originalHeight);
+
+                    const viewport = page.getViewport({ scale: scale });
+
+                    const context = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    page.render(renderContext);
+                });
+            });
+        }
+
+        let lastTimestamp = null;
+
+        async function checkForNewUploads() {
+            try {
+                const response = await fetch('/latest-upload-timestamp');
+                const data = await response.json();
+
+                if (data.timestamp) {
+                    if (lastTimestamp === null) {
+                        // On the first run, just set the timestamp without reloading
+                        lastTimestamp = data.timestamp;
+                    } else if (data.timestamp !== lastTimestamp) {
+                        // If the timestamp has changed, update it and reload the page
+                        lastTimestamp = data.timestamp;
+                        location.reload();
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking for new uploads:', error);
+            }
+        }
+
+        // Poll the server every 5 seconds
+        setInterval(checkForNewUploads, 5000);
+
+    </script>
+</body>
+
+</html>
